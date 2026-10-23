@@ -1,0 +1,1 @@
+Server is in project root, not in public.
