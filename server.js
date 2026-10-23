@@ -10,6 +10,27 @@ const OTP_LIFETIME_MS = 5 * 60 * 1000;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
+// Protect ESP32 device endpoints with a secret token
+function requireDeviceToken(req, res, next) {
+  const expected = process.env.DEVICE_TOKEN;
+  const supplied = req.get("X-Device-Token");
+
+  if (!expected) {
+    return res.status(500).json({
+      ok: false,
+      message: "Device authentication is not configured."
+    });
+  }
+
+  if (supplied !== expected) {
+    return res.status(401).json({
+      ok: false,
+      message: "Unauthorized device."
+    });
+  }
+
+  next();
+}
 
 let nextEventId = 1;
 let nextCommandId = 1;
@@ -141,7 +162,7 @@ app.post("/api/mode", (req, res) => {
 });
 
 // ESP32 reads the selected mode and target
-app.get("/api/device/config", (req, res) => {
+app.get("/api/device/config", requireDeviceToken, (req, res) => {
   deviceOnlineAt = Date.now();
 
   res.json({
@@ -152,7 +173,7 @@ app.get("/api/device/config", (req, res) => {
 });
 
 // ESP32 reports the latest DS18B20 reading
-app.post("/api/device/temperature", (req, res) => {
+app.post("/api/device/temperature", requireDeviceToken, (req, res) => {
   deviceOnlineAt = Date.now();
 
   const value = Number((req.body || {}).temperatureC);
@@ -221,7 +242,7 @@ app.post("/api/delivery/verify", (req, res) => {
 });
 
 // Physical keypad OTP verification
-app.post("/api/device/verify-otp", (req, res) => {
+app.post("/api/device/verify-otp", requireDeviceToken, (req, res) => {
   deviceOnlineAt = Date.now();
 
   const otp = String((req.body || {}).otp || "").trim();
@@ -236,7 +257,7 @@ app.post("/api/device/verify-otp", (req, res) => {
 });
 
 // ESP32 polls lock commands
-app.get("/api/device/command", (req, res) => {
+app.get("/api/device/command", requireDeviceToken, (req, res) => {
   deviceOnlineAt = Date.now();
 
   const command = pendingCommand;
@@ -246,7 +267,7 @@ app.get("/api/device/command", (req, res) => {
 });
 
 // ESP32 reports servo status
-app.post("/api/device/event", (req, res) => {
+app.post("/api/device/event", requireDeviceToken, (req, res) => {
   deviceOnlineAt = Date.now();
 
   const type = String((req.body || {}).type || "");
