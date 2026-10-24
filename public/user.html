@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -13,30 +12,25 @@
 <h1>AI Smart Food Shelf</h1>
 <p class="sub">User dashboard · Temperature and delivery access</p>
 </header>
-
 <section class="card">
 <h2>Temperature Control</h2>
 <p>Select the required shelf mode.</p>
-
 <button id="hot" class="primary">🔥 HOT — 45°C</button>
 <button id="cold" class="secondary">❄️ COLD — 10°C</button>
-
 <p>Selected mode: <strong id="mode">Loading...</strong></p>
 <p>Target temperature: <strong id="target">--</strong></p>
 <p>Surrounding temperature: <strong id="temperature">Waiting for sensor...</strong></p>
 <p id="modeMessage" class="notice">Connecting...</p>
 </section>
-
 <section class="card">
 <div class="muted">Servo lock status</div>
 <div id="status" class="status">Loading…</div>
 <div id="device" class="muted">Checking ESP32 connection…</div>
 <div id="remaining" class="muted"></div>
 </section>
-
 <section class="card">
 <h2>Issue delivery OTP</h2>
-<p>Generate a one-time 6-digit code. It appears on the delivery dashboard and expires after 5 minutes if unused.</p>
+<p>Generate a one-time 4-digit code using digits 0–6. It appears on the delivery dashboard and expires after 5 minutes if unused.</p>
 <button id="generate" class="primary">Generate new OTP</button>
 <div id="otpArea" hidden>
 <p class="muted">Your generated OTP:</p>
@@ -46,133 +40,74 @@
 </div>
 <div id="message" class="notice" role="status">Waiting for activity.</div>
 </section>
-
 <section class="card">
 <h2>Recent events</h2>
 <div id="events" class="muted">No events yet.</div>
 <button id="notify" class="secondary">Enable browser notifications</button>
 </section>
-
-<footer>
-Prototype: temperature readings depend on the connected sensor.
-Lock status reflects the servo command, not physical door position.
-</footer>
+<footer>Prototype: temperature readings depend on the connected sensor. Lock status reflects the servo command, not physical door position.</footer>
 </main>
-
 <script>
 let lastEventId = 0, activeOtp = "";
 const $ = id => document.getElementById(id);
-
 async function api(url, opts = {}) {
-  const r = await fetch(url, {
-    headers: {"Content-Type": "application/json"},
-    ...opts
-  });
+  const r = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opts });
   const d = await r.json();
   if (!r.ok) throw new Error(d.message || "Request failed");
   return d;
 }
-
 async function selectMode(mode) {
   try {
-    const d = await api("/api/mode", {
-      method: "POST",
-      body: JSON.stringify({mode})
-    });
+    const d = await api("/api/mode", { method: "POST", body: JSON.stringify({ mode }) });
     $("mode").textContent = d.mode;
     $("target").textContent = d.targetC + "°C";
     $("modeMessage").textContent = "Mode saved.";
   } catch (e) {
-    $("modeMessage").textContent =
-      "Could not save mode. The server needs the /api/mode endpoint.";
+    $("modeMessage").textContent = "Could not save mode. The server needs the /api/mode endpoint.";
   }
 }
-
 $("hot").onclick = () => selectMode("HOT");
 $("cold").onclick = () => selectMode("COLD");
-
 $("generate").onclick = async () => {
   try {
-    const d = await api("/api/user/generate-otp", {
-      method: "POST", body: "{}"
-    });
+    const d = await api("/api/user/generate-otp", { method: "POST", body: "{}" });
     activeOtp = d.otp;
     $("otp").textContent = d.otp;
     $("otpArea").hidden = false;
-    $("expiry").textContent =
-      "Expires at " + new Date(d.expiresAt).toLocaleTimeString();
+    $("expiry").textContent = "Expires at " + new Date(d.expiresAt).toLocaleTimeString();
     $("message").textContent = d.message;
-  } catch (e) {
-    $("message").textContent = e.message;
-  }
+  } catch (e) { $("message").textContent = e.message; }
 };
-
 $("copy").onclick = async () => {
-  try {
-    await navigator.clipboard.writeText(activeOtp);
-    $("message").textContent = "OTP copied.";
-  } catch (e) {
-    $("message").textContent = "Select and copy the code manually.";
-  }
+  try { await navigator.clipboard.writeText(activeOtp); $("message").textContent = "OTP copied."; }
+  catch (e) { $("message").textContent = "Select and copy the code manually."; }
 };
-
 $("notify").onclick = async () => {
-  if (!("Notification" in window)) {
-    alert("Notifications not supported.");
-    return;
-  }
+  if (!("Notification" in window)) { alert("Notifications not supported."); return; }
   const p = await Notification.requestPermission();
-  $("message").textContent =
-    p === "granted" ? "Notifications enabled." : "Permission not granted.";
+  $("message").textContent = p === "granted" ? "Notifications enabled." : "Permission not granted.";
 };
-
 function esc(s) {
-  return String(s).replace(/[&<>"']/g, c =>
-    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
-
 async function refresh() {
   try {
     const s = await api("/api/state");
     $("status").textContent = s.lockStatus;
-    $("device").textContent = s.deviceOnline
-      ? "ESP32 connected" : "ESP32 not seen recently";
+    $("device").textContent = s.deviceOnline ? "ESP32 connected" : "ESP32 not seen recently";
     $("device").className = s.deviceOnline ? "good" : "bad";
-    $("remaining").textContent = s.remainingMs > 0
-      ? "Access window remaining: " + Math.ceil(s.remainingMs / 1000) + " seconds"
-      : "";
-
-    if (s.mode) {
-      $("mode").textContent = s.mode;
-      $("target").textContent =
-        (s.mode === "HOT" ? 45 : 10) + "°C";
-    }
-    if (typeof s.temperatureC === "number") {
-      $("temperature").textContent = s.temperatureC.toFixed(2) + "°C";
-    }
-
-    $("events").innerHTML = s.events.length
-      ? s.events.slice(0,20).map(e =>
-          `<div class="event"><strong>${esc(e.message)}</strong><time>${new Date(e.time).toLocaleString()}</time></div>`
-        ).join("")
-      : "No events yet.";
-
+    $("remaining").textContent = s.remainingMs > 0 ? "Access window remaining: " + Math.ceil(s.remainingMs / 1000) + " seconds" : "";
+    if (s.mode) { $("mode").textContent = s.mode; $("target").textContent = (s.mode === "HOT" ? 45 : 10) + "°C"; }
+    if (typeof s.temperatureC === "number") $("temperature").textContent = s.temperatureC.toFixed(2) + "°C";
+    $("events").innerHTML = s.events.length ? s.events.slice(0,20).map(e => `<div class="event"><strong>${esc(e.message)}</strong><time>${new Date(e.time).toLocaleString()}</time></div>`).join("") : "No events yet.";
     for (const e of s.events) {
       if (e.id > lastEventId) {
-        if (lastEventId &&
-            ["unlocked","locked","otp-requested","otp-failed","auto-lock-requested"].includes(e.type) &&
-            "Notification" in window &&
-            Notification.permission === "granted") {
-          new Notification("AI Smart Food Shelf", {body:e.message});
-        }
+        if (lastEventId && ["unlocked","locked","otp-requested","otp-failed","auto-lock-requested"].includes(e.type) && "Notification" in window && Notification.permission === "granted") new Notification("AI Smart Food Shelf", { body: e.message });
         lastEventId = Math.max(lastEventId, e.id);
       }
     }
-  } catch (e) {
-    $("device").textContent = "Dashboard server unavailable";
-  }
+  } catch (e) { $("device").textContent = "Dashboard server unavailable"; }
 }
-
 refresh();
 setInterval(refresh, 1500);
 </script>
