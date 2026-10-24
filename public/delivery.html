@@ -7,20 +7,34 @@
 <body><main class="wrap">
 <header><h1>Delivery Access</h1><p class="sub">AI Smart Food Shelf · Delivery dashboard</p></header>
 <section class="card"><div class="muted">Shelf status</div><div id="status" class="status">Loading…</div><div id="device" class="muted">Checking ESP32 connection…</div><div id="remaining" class="notice">Access window status will appear here.</div></section>
-<section class="card"><h2>Current delivery OTP</h2><p>When the user generates an OTP, it appears here automatically. Type these six digits on the shelf's physical keypad and press <strong>#</strong>. The OTP expires after 5 minutes and can be used once.</p><div id="otp" class="code">Waiting for user…</div><p id="expiry" class="muted"></p><div id="message" class="notice" role="status">Waiting for the user to generate an OTP.</div></section>
+<section class="card"><h2>Current delivery OTP</h2><p>When the user generates an OTP, it appears here automatically. Enter these four digits (0–6 only) on the shelf's physical keypad and press <strong>#</strong>. The OTP expires after 5 minutes and can be used once.</p><div id="otp" class="code">Waiting for user…</div><p id="expiry" class="muted"></p><div id="message" class="notice" role="status">Waiting for the user to generate an OTP.</div></section>
 <section class="card"><h2>Need another delivery attempt?</h2><p>If more food remains after the gate relocks, ask the user to generate a new OTP.</p><button id="request" class="secondary">Request another OTP</button><div id="requestMessage" class="muted"></div></section>
-<footer>The physical keypad is used to submit the OTP. The gate is commanded to relock after two minutes. Status reflects the servo command, not confirmed physical door position.</footer>
+<footer>The physical keypad is used to submit the OTP. The gate is commanded to relock after 20 seconds. Status reflects the servo command, not confirmed physical door position.</footer>
 </main>
 <script>
-const $=id=>document.getElementById(id);
-async function api(url,opts={}){const r=await fetch(url,{headers:{"Content-Type":"application/json"},...opts});const d=await r.json();if(!r.ok)throw new Error(d.message||"Request failed");return d;}
-async function refresh(){try{
-const [s,o]=await Promise.all([api("/api/state"),api("/api/delivery/current-otp")]);
-$("status").textContent=s.lockStatus;$("device").textContent=s.deviceOnline?"ESP32 connected":"ESP32 not seen recently";$("device").className=s.deviceOnline?"good":"bad";
-$("remaining").textContent=s.remainingMs>0?"Time remaining: "+Math.ceil(s.remainingMs/1000)+" seconds":"No active access window.";
-if(o.active){$("otp").textContent=o.otp;$("expiry").textContent="Expires at "+new Date(o.expiresAt).toLocaleTimeString();$("message").textContent="Enter this code on the physical keypad, then press #.";$("message").className="notice good";}
-else{$("otp").textContent="No active OTP";$("expiry").textContent="";$("message").textContent="Ask the user to generate a new OTP.";$("message").className="notice";}
-}catch(e){$("device").textContent="Dashboard server unavailable";$("message").textContent=e.message;}}
-$("request").onclick=async()=>{try{const d=await api("/api/delivery/request-otp",{method:"POST",body:"{}"});$("requestMessage").textContent=d.message;}catch(e){$("requestMessage").textContent=e.message;}}
-refresh();setInterval(refresh,1000);
+const $ = id => document.getElementById(id);
+async function api(url, opts = {}) { const r = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opts }); const d = await r.json(); if (!r.ok) throw new Error(d.message || "Request failed"); return d; }
+async function refresh() {
+  try {
+    const [s, o] = await Promise.all([api("/api/state"), api("/api/delivery/current-otp")]);
+    $("status").textContent = s.lockStatus;
+    $("device").textContent = s.deviceOnline ? "ESP32 connected" : "ESP32 not seen recently";
+    $("device").className = s.deviceOnline ? "good" : "bad";
+    $("remaining").textContent = s.remainingMs > 0 ? "Time remaining: " + Math.ceil(s.remainingMs / 1000) + " seconds" : "No active access window.";
+    if (o.active) {
+      $("otp").textContent = o.otp;
+      $("expiry").textContent = "Expires at " + new Date(o.expiresAt).toLocaleTimeString();
+      $("message").textContent = "Enter this 4-digit code on the physical keypad, then press #.";
+      $("message").className = "notice good";
+    } else {
+      $("otp").textContent = "No active OTP";
+      $("expiry").textContent = "";
+      $("message").textContent = "Ask the user to generate a new OTP.";
+      $("message").className = "notice";
+    }
+  } catch (e) { $("device").textContent = "Dashboard server unavailable"; $("message").textContent = e.message; }
+}
+$("request").onclick = async () => { try { const d = await api("/api/delivery/request-otp", { method: "POST", body: "{}" }); $("requestMessage").textContent = d.message; } catch (e) { $("requestMessage").textContent = e.message; } };
+refresh();
+setInterval(refresh, 1000);
 </script></body></html>
